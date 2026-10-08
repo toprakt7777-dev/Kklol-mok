@@ -12,7 +12,7 @@
 if not game:IsLoaded() then game.Loaded:Wait() end
 
 -- // SCRIPT SOURCE CONFIGURATION FOR QUEUE ON TELEPORT
-_G.BloxHubScriptUrl = _G.BloxHubScriptUrl or "https://raw.githubusercontent.com/huyyeuemhihi/Fluent/refs/heads/main/Fluentvip.lua"
+_G.BloxHubScriptUrl = _G.BloxHubScriptUrl or "https://github.com/toprakt7777-dev/Kklol-mok/blob/main/Yo.lua"
 
 -- // PREVIOUS SCRIPT CLEANUP
 if _G.BloxHubCleanup then
