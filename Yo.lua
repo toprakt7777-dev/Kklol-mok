@@ -1,18 +1,4 @@
--- [[ Rscripts Risk Notice ]]
--- This script is not verified by rscripts.net. Deal with caution.
---
--- Stay safe:
---   • Never log in on unofficial Roblox sites or lookalike domains.
---   • Real Roblox links use roblox.com (check the .com ending).
---   • Treat fake Roblox login / "claim reward" pages as phishing.
--- [[ End Rscripts Risk Notice ]]
-
--- ⚠️ PUT THIS AT THE VERY TOP OF YOUR SCRIPT (LINE 1) BEFORE ANYTHING ELSE! ⚠️
-
 if not game:IsLoaded() then game.Loaded:Wait() end
-
--- // SCRIPT SOURCE CONFIGURATION FOR QUEUE ON TELEPORT
-_G.BloxHubScriptUrl = _G.BloxHubScriptUrl or "https://raw.githubusercontent.com/huyyeuemhihi/Fluent/refs/heads/main/Fluentvip.lua"
 
 -- // PREVIOUS SCRIPT CLEANUP
 if _G.BloxHubCleanup then
@@ -49,8 +35,9 @@ local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
 
 -- // Core References
-local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
-local Camera = Workspace.CurrentCamera or Workspace:GetPropertyChangedSignal("CurrentCamera"):Wait()
+local LocalPlayer = Players.LocalPlayer or Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
+local Camera = Workspace.CurrentCamera
+local Mouse = LocalPlayer:GetMouse()
 local ServerJoinTime = os.clock()
 
 -- // Global Settings & Config System
@@ -131,7 +118,7 @@ local DefaultSettings = {
 
     -- 30M SERVER BOUNTY FILTER SETTINGS
     FilterMinServerBounty = true,
-    MinServerBounty = 30000000
+    MinServerBounty = 30000000 -- 30 Million
 }
 
 local Settings = {}
@@ -164,11 +151,8 @@ end
 
 LoadConfig()
 
-local IsServerHopping = false
-
 -- // TOTAL SERVER BOUNTY CALCULATOR
 local function GetTotalServerBounty()
-    if IsServerHopping then return 0 end
     local totalBounty = 0
     pcall(function()
         for _, p in ipairs(Players:GetPlayers()) do
@@ -219,7 +203,6 @@ ClearLoadingOverlays()
 
 -- // TEAM ASSIGNMENT SYSTEM
 local function JoinTeam(teamName)
-    if IsServerHopping then return end
     teamName = teamName or Settings.SavedTeam or "Pirates"
     pcall(function()
         ClearLoadingOverlays()
@@ -238,7 +221,6 @@ end)
 
 task.spawn(function()
     while task.wait(1) do
-        if IsServerHopping then break end
         pcall(function()
             ClearLoadingOverlays()
             if LocalPlayer.Team == nil or LocalPlayer.Team.Name == "Neutral" or not LocalPlayer.Character then
@@ -266,36 +248,22 @@ local function StopTween()
 end
 
 -- // SAFE TELEPORT TEARDOWN & RE-EXECUTION QUEUE
+local IsServerHopping = false
+
 local function QueueScriptOnTeleport()
     pcall(function()
-        local queueFunc = queue_on_teleport 
-            or (syn and syn.queue_on_teleport) 
-            or (fluxus and fluxus.queue_on_teleport)
-            or (getgenv and getgenv().queue_on_teleport)
-
-        if queueFunc and type(queueFunc) == "function" then
-            local scriptUrl = _G.BloxHubScriptUrl or "https://raw.githubusercontent.com/huyyeuemhihi/Fluent/refs/heads/main/Fluentvip.lua"
-            queueFunc(string.format([[
+        local queueFunc = (syn and syn.queue_on_teleport) or queue_on_teleport or (fluxus and fluxus.queue_on_teleport)
+        if queueFunc then
+            queueFunc([[
                 repeat task.wait() until game:IsLoaded()
                 task.wait(1)
-                pcall(function()
-                    loadstring(game:HttpGet("%s"))()
-                end)
-            ]], scriptUrl))
+                loadstring(game:HttpGet("https://raw.githubusercontent.com/huyyeuemhihi/Fluent/refs/heads/main/Fluentvip.lua"))()
+            ]])
         end
     end)
 end
 
--- 1. Prime the queue immediately on script load
-task.spawn(QueueScriptOnTeleport)
-
--- 2. Hook into Roblox's global OnTeleport event so ANY server movement auto-queues the script
-AddConnection(LocalPlayer.OnTeleport:Connect(function()
-    QueueScriptOnTeleport()
-end))
-
 local function PrepareForTeleport()
-    IsServerHopping = true
     pcall(StopTween)
     pcall(SaveConfig)
     QueueScriptOnTeleport()
@@ -314,31 +282,29 @@ local function PrepareForTeleport()
     end
 end
 
-
--- // OPTIMIZED FAST BLOX FRUITS SERVER BROWSER HOPPER
+-- // BLOX FRUITS NATIVE SERVER BROWSER SERVER HOPPER
 local function ServerHop(maxPlayers, region)
     if IsServerHopping then return end
-    PrepareForTeleport()
+    IsServerHopping = true
 
-    maxPlayers = maxPlayers or Settings.ServerHopMaxPlayers or 10
+    maxPlayers = maxPlayers or Settings.ServerHopMaxPlayers or 5
     region = region or Settings.ServerHopRegion or "Singapore"
 
     task.spawn(function()
         ClearLoadingOverlays()
 
+        -- Method 1: Blox Fruits Native __ServerBrowser Remote
         local serverBrowserRemote = ReplicatedStorage:FindFirstChild("__ServerBrowser")
-        local playerGui = LocalPlayer:FindFirstChild("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 5)
+        local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
 
         if serverBrowserRemote then
+            pcall(function()
+                if playerGui and playerGui:FindFirstChild("ServerBrowser") and playerGui.ServerBrowser:FindFirstChild("Frame") then
+                    playerGui.ServerBrowser.Frame.Filters.SearchRegion.TextBox.Text = region
+                end
+            end)
+
             for page = 1, 100 do
-                if not IsServerHopping then break end
-
-                pcall(function()
-                    if playerGui and playerGui:FindFirstChild("ServerBrowser") and playerGui.ServerBrowser:FindFirstChild("Frame") then
-                        playerGui.ServerBrowser.Frame.Filters.SearchRegion.TextBox.Text = region
-                    end
-                end)
-
                 local success, response = pcall(function()
                     return serverBrowserRemote:InvokeServer(page)
                 end)
@@ -347,46 +313,45 @@ local function ServerHop(maxPlayers, region)
                     for jobId, info in pairs(response) do
                         if jobId ~= game.JobId and type(info) == "table" then
                             local count = tonumber(info.Count) or 0
-                            local isPrivate = string.find(tostring(info.Private), "true") ~= nil
+                            local isPrivate = string.find(tostring(info.Private), "true")
 
-                            if count > 0 and count < 12 and count <= maxPlayers and not isPrivate then
-                                local teleported = pcall(function()
+                            if count > 0 and count <= maxPlayers and not isPrivate then
+                                PrepareForTeleport()
+                                local tpSuccess = pcall(function()
                                     serverBrowserRemote:InvokeServer("teleport", jobId)
                                 end)
 
-                                if teleported then
-                                    task.wait(8)
+                                if tpSuccess then
+                                    task.wait(6)
+                                    IsServerHopping = false
                                     return
                                 end
                             end
                         end
                     end
                 end
-                task.wait(0.2)
+                task.wait(0.1)
             end
         end
 
+        -- Method 2: HTTP Games API Fallback
         local placeId = game.PlaceId
         local req = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
+        local cursor = ""
         local candidateServers = {}
 
-        local apiEndpoints = {
-            string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Desc&limit=100", placeId),
-            string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100", placeId)
-        }
-
-        for _, url in ipairs(apiEndpoints) do
-            local rawResult = nil
-            pcall(function()
+        for page = 1, 8 do
+            local url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100%s", placeId, cursor ~= "" and ("&cursor=" .. cursor) or "")
+            local success, rawResult = pcall(function()
                 if req then
                     local res = req({ Url = url, Method = "GET" })
-                    rawResult = res and res.Body
+                    return res and res.Body
                 else
-                    rawResult = game:HttpGet(url)
+                    return game:HttpGet(url)
                 end
             end)
 
-            if rawResult and type(rawResult) == "string" then
+            if success and rawResult and type(rawResult) == "string" then
                 local decodeOk, data = pcall(function() return HttpService:JSONDecode(rawResult) end)
                 if decodeOk and data and data.data then
                     for _, server in ipairs(data.data) do
@@ -394,32 +359,38 @@ local function ServerHop(maxPlayers, region)
                             local playing = tonumber(server.playing) or 0
                             local maxCap = tonumber(server.maxPlayers) or 12
                             
-                            if playing > 0 and playing < maxCap and playing <= maxPlayers then
+                            if playing > 0 and playing <= (maxCap - 1) and playing <= maxPlayers then
                                 table.insert(candidateServers, server.id)
                             end
                         end
                     end
+
+                    cursor = data.nextPageCursor or ""
+                    if #candidateServers >= 5 or not cursor or cursor == "" then
+                        break
+                    end
                 end
             end
-            if #candidateServers >= 5 then break end
-            task.wait(0.3)
+            task.wait(0.2)
         end
 
         if #candidateServers > 0 then
             local targetJobId = candidateServers[math.random(1, #candidateServers)]
+            PrepareForTeleport()
             pcall(function()
                 TeleportService:TeleportToPlaceInstance(placeId, targetJobId, LocalPlayer)
             end)
             task.wait(6)
+            IsServerHopping = false
         else
+            -- Method 3: Standard Teleport Fallback
+            PrepareForTeleport()
             pcall(function()
                 TeleportService:Teleport(placeId, LocalPlayer)
             end)
             task.wait(6)
+            IsServerHopping = false
         end
-
-        task.wait(3)
-        IsServerHopping = false
     end)
 end
 
@@ -434,6 +405,7 @@ local CharacterData = {
     RootPart = nil
 }
 
+-- // LOCAL PLAYER DEATH TRACKER FOR SERVER HOP
 local LocalPlayerDeathCount = 0
 
 local function TrackLocalPlayerDeath(char)
@@ -483,6 +455,7 @@ if LocalPlayer.Character then
     TrackLocalPlayerDeath(LocalPlayer.Character)
 end
 
+-- // PORTAL GATEWAY & DESTINATIONS MAPPING
 local PORTAL_DESTINATIONS = {
     ["Haunted Ship"]  = Vector3.new(937, 125, 32879),
     ["Dark Arena"]    = Vector3.new(3948, 13, -3479),
@@ -522,6 +495,7 @@ if RequestGateway then
     end
 end
 
+-- // UTILITY & NETWORK PING CALCULATOR
 local function GetNetworkPing()
     local ping = 0.03
     pcall(function()
@@ -568,11 +542,13 @@ local function ApplyAntiStun()
     end
 end
 
+-- // World Identification
 local PlaceId = game.PlaceId
 local World1 = PlaceId == 2753915549 or PlaceId == 85211729168715
 local World2 = PlaceId == 4442272183 or PlaceId == 79091703265657
 local World3 = PlaceId == 7449423635 or PlaceId == 100117331123089
 
+-- // Hit Validator & Damage/Kill Tracker
 local HitValidator = {
     LastHitTime = 0,
     LastHitDamage = 0,
@@ -623,6 +599,7 @@ AddConnection(Players.PlayerAdded:Connect(function(p)
     TrackPlayerKills(p)
 end))
 
+-- // Reference Data Lists & Mappings
 local IslandTeleports = {}
 if World1 then
     IslandTeleports = {
@@ -696,9 +673,9 @@ local function GetCenterScreen()
     return Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
 end
 
+-- // AUTOMATIC BUSO (HAKI) CHECKER
 task.spawn(function()
     while task.wait(0.5) do
-        if IsServerHopping then break end
         pcall(function()
             local char = CharacterData.Character
             if char and CommF_ then
@@ -715,6 +692,7 @@ task.spawn(function()
     end
 end)
 
+-- // TARGET PREDICTION ENGINE
 local function GetPredictedTargetPos(targetPart, projectileSpeed, gravity)
     if not targetPart or not targetPart.Parent then return Vector3.zero end
     local pos = targetPart.Position
@@ -737,6 +715,7 @@ local function GetPredictedTargetPos(targetPart, projectileSpeed, gravity)
     return pos
 end
 
+-- // SAFE HYBRID SILENT AIM & SKILL REDIRECT ENGINE
 pcall(function()
     local getrawmetatable = getrawmetatable or function() return getmetatable(game) end
     local setreadonly = setreadonly or make_writeable or function() end
@@ -749,12 +728,8 @@ pcall(function()
     local isHooking = false
 
     mt.__index = newcclosure(function(self, index)
-        if IsServerHopping then
-            return oldIndex(self, index)
-        end
-
-        if not checkcaller() and not isHooking and (Settings.AimbotSkills or Settings.XMove100Hit or Settings.SpamSoulGuitar) then
-            if self == LocalPlayer:GetMouse() then
+        if not checkcaller() and not IsServerHopping and not isHooking and (Settings.AimbotSkills or Settings.XMove100Hit or Settings.SpamSoulGuitar) then
+            if self == Mouse then
                 isHooking = true
                 local idx = type(index) == "string" and string.lower(index) or ""
                 if idx == "hit" or idx == "cframe" then
@@ -787,13 +762,9 @@ pcall(function()
     end)
 
     mt.__namecall = newcclosure(function(self, ...)
-        if IsServerHopping then
-            return oldNamecall(self, ...)
-        end
-
         local method = getnamecallmethod and getnamecallmethod() or ""
 
-        if not checkcaller() and not isHooking and (Settings.AimbotSkills or Settings.XMove100Hit or Settings.SpamSoulGuitar) then
+        if not checkcaller() and not IsServerHopping and not isHooking and (Settings.AimbotSkills or Settings.XMove100Hit or Settings.SpamSoulGuitar) then
             if method == "Raycast" or method == "raycast" then
                 if CurrentTargetPart and CurrentTargetPart.Parent then
                     isHooking = true
@@ -856,6 +827,7 @@ pcall(function()
     setreadonly(mt, true)
 end)
 
+-- // PLAYER UTILITY & SAFE ZONE FUNCTIONS
 local function IsPlayerInSafeZone(player)
     if not player then return true end
     
@@ -953,6 +925,7 @@ local function GetPlayerTeam(player)
     return tostring(player.Team.Name)
 end
 
+-- // ITEM & WEAPON MANAGEMENT
 local function EquipToolByName(toolName)
     local char = CharacterData.Character
     local backpack = LocalPlayer:FindFirstChild("Backpack")
@@ -1076,6 +1049,7 @@ local function SafeTweenTo(targetCFrame, speed)
     ActiveTween:Play()
 end
 
+-- // PORTAL TELEPORT MECHANIC EXECUTION
 local function PerformPortalTeleport(destinationName)
     if IsPortalTeleporting or IsServerHopping or not destinationName then return end
     IsPortalTeleporting = true
@@ -1109,6 +1083,7 @@ local function PerformPortalTeleport(destinationName)
     IsPortalTeleporting = false
 end
 
+-- // SOUL GUITAR & M1 AIMBOT SPAMMER
 local function FireSoulGuitarSpam()
     if not Settings.SpamSoulGuitar or IsServerHopping then return end
 
@@ -1127,11 +1102,8 @@ local function FireSoulGuitarSpam()
             return
         end
         targetPos = GetPredictedTargetPos(CurrentTargetPart)
-    else
-        local mouse = LocalPlayer:GetMouse()
-        if mouse then
-            pcall(function() targetPos = mouse.Hit.Position end)
-        end
+    elseif Mouse then
+        pcall(function() targetPos = Mouse.Hit.Position end)
     end
 
     if targetPos == Vector3.zero then return end
@@ -1155,6 +1127,7 @@ task.spawn(function()
     end
 end)
 
+-- // RACE V4 ACTIVATOR
 local LastV4Attempt = 0
 local function TriggerRaceV4()
     if not Settings.AutoRaceV4 or IsServerHopping then return end
@@ -1172,6 +1145,7 @@ local function TriggerRaceV4()
     end)
 end
 
+-- // BUDDY SWORD X SPAMMER & SMART COMBO
 local function ExecuteBuddySwordXSpam(targetPos)
     if IsServerHopping then return end
     pcall(function()
@@ -1241,6 +1215,7 @@ local function ExecuteSmartCombo(targetPart)
     end)
 end
 
+-- // TARGETING & BOUNTY UTILITIES
 local function CanGetBounty(targetPlayer)
     if not targetPlayer or targetPlayer == LocalPlayer then return false end
     
@@ -1254,16 +1229,6 @@ local function CanGetBounty(targetPlayer)
 
     if IsPlayerInSafeZone(targetPlayer) then
         return false
-    end
-
-    local targetChar = targetPlayer.Character
-    local targetHrp = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
-    if targetHrp and CharacterData.RootPart then
-        local dist = (targetHrp.Position - CharacterData.RootPart.Position).Magnitude
-        local maxAllowedDist = Settings.MaxTargetDistance or 10000
-        if dist > maxAllowedDist then
-            return false
-        end
     end
     
     local myLevel = GetPlayerLevel(LocalPlayer)
@@ -1329,7 +1294,7 @@ local function GetClosestPlayerToLocalPlayer()
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= LocalPlayer and not IsPlayerInSafeZone(p) and not IsPlayerPvPDisabled(p) and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health > 0 then
                 local dist = (p.Character.HumanoidRootPart.Position - myPos).Magnitude
-                if dist < shortestDistance and dist <= (Settings.MaxTargetDistance or 10000) then
+                if dist < shortestDistance then
                     shortestDistance = dist
                     closestPlayer = p
                 end
@@ -1348,15 +1313,12 @@ local function GetClosestPlayerToCenterScreen()
 
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and not IsPlayerInSafeZone(p) and not IsPlayerPvPDisabled(p) and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health > 0 then
-            local hrp = p.Character.HumanoidRootPart
-            if CharacterData.RootPart and (hrp.Position - CharacterData.RootPart.Position).Magnitude <= (Settings.MaxTargetDistance or 10000) then
-                local screenPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-                if onScreen then
-                    local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
-                    if dist < shortestDistance then
-                        shortestDistance = dist
-                        closestPlayer = p
-                    end
+            local screenPos, onScreen = Camera:WorldToViewportPoint(p.Character.HumanoidRootPart.Position)
+            if onScreen then
+                local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+                if dist < shortestDistance then
+                    shortestDistance = dist
+                    closestPlayer = p
                 end
             end
         end
@@ -1364,6 +1326,7 @@ local function GetClosestPlayerToCenterScreen()
     return closestPlayer
 end
 
+-- // FAST ATTACK SYSTEM
 local FastAttack = {}
 local FastAttack_enemies = Workspace:FindFirstChild("Enemies") or Workspace
 local FastAttack_characters = Workspace:FindFirstChild("Characters") or Workspace
@@ -1427,6 +1390,7 @@ task.spawn(function()
     end
 end)
 
+-- // STOP BOUNTY BUTTON UI
 local StopBountyGui = nil
 
 local function CreateStopBountyButton(onStopClicked)
@@ -1558,6 +1522,7 @@ local function SetBountyHuntMode(enabled)
     end
 end
 
+-- // FLUENT UI BUILDER
 BuildUI = function(isPVPMode)
     StopTween()
     UIControls = {}
@@ -1608,6 +1573,7 @@ BuildUI = function(isPVPMode)
     Tabs.ESP = Window:AddTab({ Title = "ESP & Visuals", Icon = "rbxassetid://125736686613291" })
     Tabs.Settings = Window:AddTab({ Title = "Config & Server", Icon = "rbxassetid://125736686613291" })
 
+    -- COMBAT TAB
     UIControls.PVPModeSwitchTog = Tabs.Combat:AddToggle("PVPModeSwitchTog", {
         Title = "⚡ Switch Between PVP / Standard Mode",
         Default = isPVPMode,
@@ -1668,6 +1634,7 @@ BuildUI = function(isPVPMode)
         Callback = function(v) if isSyncingUI then return end pcall(function() Settings.AutoRaceV4 = v SaveConfig() end) end
     })
 
+    -- LOCAL PLAYER / STATS & TEAM TAB
     if not isPVPMode and Tabs.LocalPlayer then
         Tabs.LocalPlayer:AddDropdown("StatsTeamDropdown", {
             Title = "🚩 Choose Auto-Join Team",
@@ -1684,6 +1651,7 @@ BuildUI = function(isPVPMode)
         })
     end
 
+    -- PVP & AIMBOT TAB
     UIControls.AimMethodDropdown = Tabs.PVP:AddDropdown("AimMethodDropdown", {
         Title = "Select Aim Target Method",
         Values = { "Closest to Center Screen", "Closest to LocalPlayer", "Selected Player" },
@@ -1743,6 +1711,7 @@ BuildUI = function(isPVPMode)
         Callback = function(v) if isSyncingUI then return end pcall(function() Settings.HitboxSize = v SaveConfig() end) end
     })
 
+    -- AUTO HUNT TAB (PVP MODE)
     if isPVPMode and Tabs.AutoHunt then
         UIControls.HuntStatusParagraph = Tabs.AutoHunt:AddParagraph({
             Title = "Auto Bounty Hunt Status",
@@ -1788,6 +1757,7 @@ BuildUI = function(isPVPMode)
         })
     end
 
+    -- TELEPORTS TAB
     local islandNames = {}
     for islandName in pairs(IslandTeleports) do table.insert(islandNames, islandName) end
 
@@ -1827,12 +1797,14 @@ BuildUI = function(isPVPMode)
         Callback = function(v) if isSyncingUI then return end pcall(function() Settings.EscapeHeight = v SaveConfig() end) end
     })
 
+    -- ESP TAB
     UIControls.PlayerESPTog = Tabs.ESP:AddToggle("PlayerESPTog", {
         Title = "Player Text ESP",
         Default = Settings.PlayerESP,
         Callback = function(v) if isSyncingUI then return end pcall(function() Settings.PlayerESP = v SaveConfig() end) end
     })
 
+    -- CONFIG & SERVER TAB
     UIControls.TeamDropdown = Tabs.Settings:AddDropdown("SavedTeamDropdownConfig", {
         Title = "🚩 Auto-Join Team Selection",
         Values = { "Pirates", "Marines" },
@@ -1861,6 +1833,7 @@ BuildUI = function(isPVPMode)
     })
 end
 
+-- Rebuild UI according to persistent saved state
 BuildUI(Settings.PVPMode or Settings.BountyHunt)
 
 if Settings.BountyHunt then
@@ -1870,6 +1843,7 @@ if Settings.BountyHunt then
     end)
 end
 
+-- // RENDER STEPPED AIMBOT & CAMERA TRACKING
 AddConnection(RunService.RenderStepped:Connect(function()
     if IsServerHopping then return end
 
@@ -1885,18 +1859,9 @@ AddConnection(RunService.RenderStepped:Connect(function()
     end
 
     if targetPlayer and not IsPlayerInSafeZone(targetPlayer) and not IsPlayerPvPDisabled(targetPlayer) and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") and targetPlayer.Character:FindFirstChild("Humanoid") and targetPlayer.Character.Humanoid.Health > 0 then
-        local hrp = targetPlayer.Character.HumanoidRootPart
-        local dist = CharacterData.RootPart and (hrp.Position - CharacterData.RootPart.Position).Magnitude or 0
-
-        if dist <= (Settings.MaxTargetDistance or 10000) then
-            CurrentTargetPart = hrp
-            CurrentTargetName = targetPlayer.Name
-            CurrentTargetPos = GetPredictedTargetPos(CurrentTargetPart)
-        else
-            CurrentTargetPart = nil
-            CurrentTargetName = "None"
-            CurrentTargetPos = Vector3.zero
-        end
+        CurrentTargetPart = targetPlayer.Character.HumanoidRootPart
+        CurrentTargetName = targetPlayer.Name
+        CurrentTargetPos = GetPredictedTargetPos(CurrentTargetPart)
     else
         CurrentTargetPart = nil
         CurrentTargetName = "None"
@@ -1926,9 +1891,9 @@ AddConnection(RunService.RenderStepped:Connect(function()
     end
 end))
 
+-- // MOVEMENT & WATER WALKER
 AddConnection(RunService.Stepped:Connect(function()
-    if IsServerHopping then return end
-    if Settings.Noclip then
+    if Settings.Noclip and not IsServerHopping then
         local char = CharacterData.Character
         if char then
             for _, part in ipairs(char:GetChildren()) do
@@ -1938,11 +1903,12 @@ AddConnection(RunService.Stepped:Connect(function()
     end
 end))
 
+-- // CONTINUOUS 30M SERVER BOUNTY CHECKER (FIXED: DELAYED INITIAL CHECK TO PREVENT IMMEDIATE HOPPING)
 task.spawn(function()
-    task.wait(15)
+    task.wait(15) -- Allow full player data replication before running total server bounty checks
     while task.wait(5) do
-        if IsServerHopping then break end
-        if Settings.BountyHunt and Settings.FilterMinServerBounty then
+        if Settings.BountyHunt and Settings.FilterMinServerBounty and not IsServerHopping then
+            -- Prevent hop if actively engaged in combat or hits registered recently
             if not HitValidator:WasHitRecently(5.0) and not IsComboRunning then
                 pcall(function()
                     local currentTotal = GetTotalServerBounty()
@@ -1959,12 +1925,12 @@ task.spawn(function()
     end
 end)
 
+-- // AUTO BOUNTY HUNT EXECUTION
 local LastEnablePvpTime = 0
 
 task.spawn(function()
     while task.wait(0.1) do
-        if IsServerHopping then break end
-        if Settings.BountyHunt then
+        if Settings.BountyHunt and not IsServerHopping then
             pcall(function()
                 if (os.clock() - LastEnablePvpTime) >= 1.0 then
                     LastEnablePvpTime = os.clock()
@@ -1976,22 +1942,14 @@ task.spawn(function()
                 local myHealth, myMaxHealth = GetLocalPlayerHealth()
                 if (myHealth / myMaxHealth < 0.3) or (HitValidator:WasHitRecently(1.0) and HitValidator:GetLastHitDamage() > 1000) then
                     IsInEscapeMode = true
-
-                    local dynamicEscapeCF = nil
-                    if HuntTargetPlayer and HuntTargetPlayer.Character and HuntTargetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                        local targetPos = HuntTargetPlayer.Character.HumanoidRootPart.Position
-                        dynamicEscapeCF = CFrame.new(targetPos.X, targetPos.Y + (Settings.EscapeHeight or 500), targetPos.Z)
-                    elseif CharacterData.RootPart then
-                        local myPos = CharacterData.RootPart.Position
-                        dynamicEscapeCF = CFrame.new(myPos.X, myPos.Y + (Settings.EscapeHeight or 500), myPos.Z)
+                    if not EscapeTargetPosition and CharacterData.RootPart then
+                        EscapeTargetPosition = CharacterData.RootPart.CFrame + Vector3.new(0, Settings.EscapeHeight or 500, 0)
                     end
-
-                    if dynamicEscapeCF then
-                        SafeTweenTo(dynamicEscapeCF, Settings.TweenSpeed)
+                    if EscapeTargetPosition then
+                        SafeTweenTo(EscapeTargetPosition, Settings.TweenSpeed)
                     end
-
                     if UIControls.HuntStatusParagraph then
-                        UIControls.HuntStatusParagraph:SetDesc("Status: Tweening Up & Healing (Maintaining Distance)")
+                        UIControls.HuntStatusParagraph:SetDesc("Status: Tweening Up & Healing (Safety Escape)")
                     end
                     return
                 else
@@ -1999,20 +1957,18 @@ task.spawn(function()
                     EscapeTargetPosition = nil
                 end
 
-                if HuntTargetPlayer then
-                    local tChar = HuntTargetPlayer.Character
-                    local tHrp = tChar and tChar:FindFirstChild("HumanoidRootPart")
-                    if tHrp and CharacterData.RootPart then
-                        local currentDist = (tHrp.Position - CharacterData.RootPart.Position).Magnitude
-                        if currentDist > (Settings.MaxTargetDistance or 10000) then
-                            HuntTargetPlayer = nil
-                        end
-                    end
-                end
-
+                -- Target Selection Logic
                 if not HuntTargetPlayer or not CanGetBounty(HuntTargetPlayer) or (os.clock() - HuntTargetStartTime > 90) then
                     HuntTargetPlayer = GetClosestBountyTarget()
                     HuntTargetStartTime = os.clock()
+                end
+
+                -- Re-check target validity
+                if not HuntTargetPlayer or not CanGetBounty(HuntTargetPlayer) then
+                    HuntTargetPlayer = GetClosestBountyTarget()
+                    if HuntTargetPlayer then
+                        HuntTargetStartTime = os.clock()
+                    end
                 end
 
                 if HuntTargetPlayer and CanGetBounty(HuntTargetPlayer) then
@@ -2068,6 +2024,7 @@ task.spawn(function()
                         ExecuteBuddySwordXSpam(targetPos)
                         ApplyAntiStun()
                     else
+                        -- Reset timeout while waiting for target respawn to prevent hopping mid-fight
                         NoTargetStartTime = os.clock()
                         if UIControls.HuntStatusParagraph then
                             UIControls.HuntStatusParagraph:SetDesc("Target: " .. HuntTargetPlayer.Name .. " (Waiting for respawn...)")
@@ -2075,6 +2032,7 @@ task.spawn(function()
                     end
                 else
                     if Settings.AutoServerHopWhenEmpty then
+                        -- Prevent server hopping if combat hits are still registering
                         if HitValidator:WasHitRecently(3.0) or IsComboRunning then
                             NoTargetStartTime = os.clock()
                             return
@@ -2086,7 +2044,7 @@ task.spawn(function()
                             end
 
                             local elapsed = os.clock() - NoTargetStartTime
-                            local waitTime = 5
+                            local waitTime = 15
                             local remaining = math.max(0, math.ceil(waitTime - elapsed))
 
                             if UIControls.HuntStatusParagraph then
@@ -2096,7 +2054,7 @@ task.spawn(function()
                             if elapsed >= waitTime then
                                 NoTargetStartTime = os.clock()
                                 if UIControls.HuntStatusParagraph then
-                                    UIControls.HuntStatusParagraph:SetDesc("Target: Hopping via Server Browser...")
+                                    UIControls.HuntStatusParagraph:SetDesc("Target: Fetching active server list...")
                                 end
                                 ServerHop()
                             end
