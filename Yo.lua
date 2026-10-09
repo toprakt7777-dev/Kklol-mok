@@ -12,7 +12,7 @@
 if not game:IsLoaded() then game.Loaded:Wait() end
 
 -- // SCRIPT SOURCE CONFIGURATION FOR QUEUE ON TELEPORT
-_G.BloxHubScriptUrl = _G.BloxHubScriptUrl or "https://github.com/toprakt7777-dev/Kklol-mok/blob/main/Yo.lua"
+_G.BloxHubScriptUrl = _G.BloxHubScriptUrl or "https://raw.githubusercontent.com/huyyeuemhihi/Fluent/refs/heads/main/Fluentvip.lua"
 
 -- // PREVIOUS SCRIPT CLEANUP
 if _G.BloxHubCleanup then
@@ -286,6 +286,14 @@ local function QueueScriptOnTeleport()
     end)
 end
 
+-- 1. Prime the queue immediately on script load
+task.spawn(QueueScriptOnTeleport)
+
+-- 2. Hook into Roblox's global OnTeleport event so ANY server movement auto-queues the script
+AddConnection(LocalPlayer.OnTeleport:Connect(function()
+    QueueScriptOnTeleport()
+end))
+
 local function PrepareForTeleport()
     IsServerHopping = true
     pcall(StopTween)
@@ -305,6 +313,7 @@ local function PrepareForTeleport()
         end
     end
 end
+
 
 -- // OPTIMIZED FAST BLOX FRUITS SERVER BROWSER HOPPER
 local function ServerHop(maxPlayers, region)
